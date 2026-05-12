@@ -1,13 +1,17 @@
 #include <Arduino.h>
 
 #include "driver/rmt.h"
+#include <ESP32Encoder.h>
+
+ESP32Encoder encoder;
+const int buttonPin = 5;
 
 const int OUTPUT_PIN = 18;
 const rmt_channel_t RMT_CHAN = RMT_CHANNEL_0;
 
 // Set parameters by default
 uint32_t pulseUs = 10;
-uint32_t pauseMs = 10;
+uint32_t pauseMs = 1;
 bool inverted = false;
 bool isRunning = true;
 
@@ -54,6 +58,12 @@ void send_pulse() {
 void setup() {
   Serial.begin(115200);
   setup_rmt();
+  ESP32Encoder::useInternalWeakPullResistors = UP; // Подтяжка к 3.3V
+  encoder.attachHalfQuad(16, 17); // CLK, DT
+  encoder.setCount(0); // Сброс счетчика
+
+  // Настройка кнопки
+  pinMode(buttonPin, INPUT_PULLUP);
   Serial.println("Impulse generator is ready. Send: <PULSE/STOP> <NORMAL/INVERTED> <us> <ms>");
   Serial.println("Output on pin: " + String(OUTPUT_PIN));
   Serial.println("Example: PULSE INVERTED 10 100");
@@ -81,6 +91,13 @@ void loop() {
         isRunning = false;
         Serial.println("Generation STOPPED");
         // Option : rmt_stop(RMT_CHAN);
+      } else if (strcmp(mode, "GET") == 0) {
+        //         uint32_t pulseUs = 10;
+        // uint32_t pauseMs = 1;
+        // bool inverted = false;
+        // bool isRunning = true;
+        Serial.println("*VALpulseUs:" + String(pulseUs) + ", pauseMs:" + String(pauseMs) + ", inverted:" + String(inverted ? "YES" : "NO") + ", isRunning:" + String(isRunning ? "YES" : "NO")  );
+        
       }
 
       if (strcmp(type, "INVERTED") == 0) {
@@ -96,5 +113,27 @@ void loop() {
     } else {
       Serial.println("Invalid command. Use: <PULSE/STOP> <NORMAL/INVERTED> <us> <ms>");
     }
+  }
+  
+  
+  static long lastCount = 0;
+  long currentCount = encoder.getCount();
+
+  if (currentCount != lastCount) {
+    if (currentCount > lastCount) {
+      // Крутим по часовой стрелке
+      Serial.println("*VAL+1");  // Передаем 1
+    } else {
+      // Крутим против часовой стрелки
+      Serial.println("*VAL-1"); // Передаем -1
+    }
+    lastCount = currentCount;
+  }
+
+  // Читаем кнопку (LOW при нажатии)
+  if (digitalRead(buttonPin) == LOW) {
+    Serial.println("*SET");
+    // encoder.setCount(0); // Например, сброс при нажатии
+    delay(200); // Антидребезг
   }
 }
