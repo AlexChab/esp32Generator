@@ -4,6 +4,14 @@
 #include <ESP32Encoder.h>
 
 ESP32Encoder encoder;
+#include <AD9833.h>
+
+#define HSPI_FSYNC 26  // Взамен пина 5 (CS)
+#define HSPI_SCLK  25  // Взамен пина 18 (CLK)
+#define HSPI_MOSI  23  // Пин данных (DAT) остается 23
+
+AD9833 gen(HSPI_FSYNC);
+
 const int buttonPin = 5;
 
 const int OUTPUT_PIN = 18;
@@ -14,6 +22,7 @@ uint32_t pulseUs = 10;
 uint32_t pauseMs = 1;
 bool inverted = false;
 bool isRunning = true;
+uint32_t defFreq = 1000000;
 
 void setup_rmt() {
   rmt_config_t config;
@@ -30,6 +39,8 @@ void setup_rmt() {
 
   rmt_config(&config);
   rmt_driver_install(RMT_CHAN, 0, 0);
+  
+  
 }
 
 void send_pulse() {
@@ -64,6 +75,16 @@ void setup() {
 
   // Настройка кнопки
   pinMode(buttonPin, INPUT_PULLUP);
+
+  SPI.begin(HSPI_SCLK, -1, HSPI_MOSI, HSPI_FSYNC); 
+
+  // 2. Инициализируем модуль AD9833
+  gen.Begin(); 
+
+  // 3. Включаем синусоидальный сигнал частотой 1 кГц
+  gen.ApplySignal(SINE_WAVE, REG0, defFreq);
+  gen.EnableOutput(true);
+
   Serial.println("Impulse generator is ready. Send: <PULSE/STOP> <NORMAL/INVERTED> <us> <ms>");
   Serial.println("Output on pin: " + String(OUTPUT_PIN));
   Serial.println("Example: PULSE INVERTED 10 100");
@@ -123,11 +144,14 @@ void loop() {
     if (currentCount > lastCount) {
       // Крутим по часовой стрелке
       Serial.println("*VAL+1");  // Передаем 1
+       
     } else {
       // Крутим против часовой стрелки
       Serial.println("*VAL-1"); // Передаем -1
     }
     lastCount = currentCount;
+    gen.ApplySignal(SINE_WAVE, REG0, defFreq + currentCount * 10000);
+
   }
 
   // Читаем кнопку (LOW при нажатии)
@@ -136,4 +160,5 @@ void loop() {
     // encoder.setCount(0); // Например, сброс при нажатии
     delay(200); // Антидребезг
   }
+  // Изменяем частоту в зависимости от положения энкодера
 }
